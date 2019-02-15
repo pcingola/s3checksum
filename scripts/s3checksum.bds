@@ -35,7 +35,7 @@ for(string line : fileList.readLines()) {
 	etagExpected := sys aws s3api head-object --bucket $bucket --key $s3key | grep ETag
 	etagExpected =  etagExpected.trim().split('"')[4].split('\\')[0]
 
-	etagCalc := sys java -jar $HOME/s3checksum.jar $fileLocal | cut -f 1
+	etagCalc := sys java -jar $programPath/../dist/s3checksum.jar $fileLocal | cut -f 1
 	etagCalc = etagCalc.trim()
 
 	ok := (etagExpected == etagCalc)
