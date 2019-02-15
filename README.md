@@ -30,8 +30,19 @@ java -jar s3checksum.jar file1 file2 file3
 
 Usage: `s3checksum.bds -bucket bucket_name -fileList files.txt`
 
-File list format (`files.txt`):
+**Input:** File list format (`files.txt`):
 - One entry per line
 - Each line consists of `localFile` and `s3Path` sperated by tab
 - 's3path' does not include the `s3://bucket` part (i.e. only the key)
+
+**Output:** One line for each file in the following format
+```
+CHECK \t $ok \t $etagExpected \t $etagCalc \t $fileLocal \t $fileS3 \n
+```
+Meaning:
+- `$ok`: Whether ETag expected and ETag calculated match
+- `$etagExpected`: Expected ETag (i.e. the one retrieved from AWS S3
+- `$etagCalc`: Calculated ETag using `java -jar s3checksum.jar file`
+- `$fileLocal`: Path to local file
+- `$fileS3`: URL for S3 file (includes bucket name)
 

@@ -28,15 +28,16 @@ for(string line : fileList.readLines()) {
 		continue;
 	}
 
-	(file, remotePath) = fields
+	(fileLocal, remotePath) = fields
+	fileS3 := "s3://$bucket" + (remotePath.startsWith('/') ? '' : '/') + remotePath
 
 	# Get ETag
 	etagExpected := sys aws s3api head-object --bucket $bucket --key $remotePath | grep ETag
 	etagExpected =  etagExpected.trim().split('"')[4].split('\\')[0]
 
-	etagCalc := sys java -jar $HOME/s3checksum.jar $file | cut -f 1
+	etagCalc := sys java -jar $HOME/s3checksum.jar $fileLocal | cut -f 1
 	etagCalc = etagCalc.trim()
 
 	ok := (etagExpected == etagCalc)
-	println "CHECK\t$ok\t$etagExpected\t$etagCalc\t$file\n"
+	println "CHECK\t$ok\t$etagExpected\t$etagCalc\t$fileLocal\t$fileS3\n"
 }
