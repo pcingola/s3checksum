@@ -24,5 +24,14 @@ Tipical use: Run the jar file using a list of file as command line, e.g.:
 java -jar s3checksum.jar file1 file2 file3
 ````
 
+### Scripts
 
+`s3checksum.bds` takes a file with a list of local/remote paths, calculates the ETag from the local file, retrieves the ETag from the file in S3 and compares them.
+
+Usage: `s3checksum.bds -bucket bucket_name -fileList files.txt`
+
+File list format (`files.txt`):
+- One entry per line
+- Each line consists of `localFile` and `s3Path` sperated by tab
+- 's3path' does not include the `s3://bucket` part (i.e. only the key)
 

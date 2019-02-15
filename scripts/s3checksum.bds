@@ -1,0 +1,42 @@
+#!/usr/bin/env bds
+
+bucket := ''	help Bucket name
+fileList := ''	help List of files to check
+
+#-------------------------------------------------------------------------------
+# Main
+#-------------------------------------------------------------------------------
+
+if(fileList.isEmpty() || bucket.isEmpty()) {
+	println "ERROR: Missing required argument"
+	println "\nUsage: s3checksum.bds -bucket bucket_name -fileList files.txt"
+	println "\nFile list format ('files.txt'):"
+	println "\t- One entry per line"
+	println "\t- Each line consists of 'localFile' and 's3Path' sperated by tab"
+	println "\t- 's3path' does not include the 's3://bucket' part (i.e. only the key)"
+	exit 1
+}
+
+string file, remotePath
+
+for(string line : fileList.readLines()) {
+	# Read line and parse it
+	line = line.trim()
+	fields := line.split('\t')
+	if(fields.size() != 2) {
+		println "ERROR: Cannot parse line '$line'"
+		continue;
+	}
+
+	(file, remotePath) = fields
+
+	# Get ETag
+	etagExpected := sys aws s3api head-object --bucket $bucket --key $remotePath | grep ETag
+	etagExpected =  etagExpected.trim().split('"')[4].split('\\')[0]
+
+	etagCalc := sys java -jar $HOME/s3checksum.jar $file | cut -f 1
+	etagCalc = etagCalc.trim()
+
+	ok := (etagExpected == etagCalc)
+	println "CHECK\t$ok\t$etagExpected\t$etagCalc\t$file\n"
+}
