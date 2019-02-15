@@ -46,3 +46,4 @@ Meaning:
 - `$fileLocal`: Path to local file
 - `$fileS3`: URL for S3 file (includes bucket name)
 
+Note: During script execution you can see the output of each command (`aws s3api`, `java -jar s3checksum.jar...`) but the resutls are in the lines that start with 'CHECK', so you can use `grep ^CHECK` to capture the output.
