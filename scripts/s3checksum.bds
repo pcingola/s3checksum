@@ -17,7 +17,7 @@ if(fileList.isEmpty() || bucket.isEmpty()) {
 	exit 1
 }
 
-string file, remotePath
+string fileLocal, s3key
 
 for(string line : fileList.readLines()) {
 	# Read line and parse it
@@ -28,11 +28,11 @@ for(string line : fileList.readLines()) {
 		continue;
 	}
 
-	(fileLocal, remotePath) = fields
-	fileS3 := "s3://$bucket" + (remotePath.startsWith('/') ? '' : '/') + remotePath
+	(fileLocal, s3key) = fields
+	fileS3 := "s3://$bucket" + (s3key.startsWith('/') ? '' : '/') + s3key
 
 	# Get ETag
-	etagExpected := sys aws s3api head-object --bucket $bucket --key $remotePath | grep ETag
+	etagExpected := sys aws s3api head-object --bucket $bucket --key $s3key | grep ETag
 	etagExpected =  etagExpected.trim().split('"')[4].split('\\')[0]
 
 	etagCalc := sys java -jar $HOME/s3checksum.jar $fileLocal | cut -f 1
