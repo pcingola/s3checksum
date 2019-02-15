@@ -2,7 +2,7 @@
 
 bucket := ''	help Bucket name
 fileList := ''	help List of files to check
-jarPath := programPath.dirName() + "/../dist/s3checksum.jar"	help Path to 's3checksum.jar' file
+jarPath := programPath.pathCanonical().dirName() + "/../dist/s3checksum.jar"	help Path to 's3checksum.jar' file
 
 #-------------------------------------------------------------------------------
 # Main
