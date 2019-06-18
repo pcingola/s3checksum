@@ -3,6 +3,8 @@ package com.astrazeneca.s3checksum;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -26,12 +28,14 @@ public class S3Checksum {
 	public static int CHUNK_SIZE = CHUNK_SIZE_M * M;
 
 	public static void main(String[] args) throws Exception {
+		String fileList = null;
 		List<String> files = new LinkedList<>();
 
 		if (args.length <= 0) {
-			System.err.println("Usage: s3Checksum [-chunkSize size_in_MB] file1 ... fileN");
+			System.err.println("Usage: s3Checksum [-chunkSize size_in_MB] [-f files.txt] [file1 ... fileN]");
 			System.err.println("Command line options:");
-			System.err.println("	chunkSize <size> : Size in MB of each 'chunk' of MD5. Default " + CHUNK_SIZE_M);
+			System.err.println("	-chunkSize <size> : Size in MB of each 'chunk' of MD5. Default " + CHUNK_SIZE_M);
+			System.err.println("	-f <files.txt>    : A txt file containing a list of files (one file per line)");
 			System.exit(0);
 		}
 
@@ -41,9 +45,16 @@ public class S3Checksum {
 			if (arg.equals("-chunkSize")) {
 				CHUNK_SIZE = Integer.parseInt(args[++i]) * M;
 				System.err.println("Setting chunk size to: " + CHUNK_SIZE);
+			} else if (arg.equals("-f")) {
+				fileList = args[++i];
 			} else {
 				files.add(arg);
 			}
+		}
+
+		// Is there a file list?
+		if (fileList != null) {
+			Files.lines(Paths.get(fileList)).forEach(l -> files.add(l));
 		}
 
 		// Calculate ETag for every file
@@ -54,8 +65,8 @@ public class S3Checksum {
 		}
 	}
 
-	String fileName;
 	String etag;
+	String fileName;
 
 	public S3Checksum(String fileName) {
 		this.fileName = fileName;
