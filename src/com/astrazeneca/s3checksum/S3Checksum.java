@@ -4,15 +4,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Calculate ETag checksum as performed by Amazon
@@ -28,6 +26,28 @@ public class S3Checksum {
 
 	public static int M = 1 * 1024 * 1024;
 	public static int CHUNK_SIZE_M = 8;
+
+	/**
+	 * Create a directory walker / fineder. We cannot use Java's walkers because they fail on read errors
+	 */
+	static List<File> listFiles(File file, int minFileSize) {
+		List<File> files = new ArrayList<>();
+		for (File f : file.listFiles()) {
+			// Ignore if we cannot read
+			if (!f.canRead()) continue;
+			// Ignore links
+			if (Files.isSymbolicLink(f.toPath())) continue;
+
+			if (f.isDirectory()) {
+				// Recurse directories
+				files.addAll(listFiles(f, minFileSize));
+			} else if (f.isFile()) {
+				// Add file
+				if (f.length() >= minFileSize) files.add(f);
+			}
+		}
+		return files;
+	}
 
 	public static void main(String[] args) throws Exception {
 		int chunkSize = CHUNK_SIZE_M * M;
@@ -49,10 +69,10 @@ public class S3Checksum {
 			String arg = args[i];
 			if (arg.equals("-chunkSize")) {
 				chunkSize = Integer.parseInt(args[++i]) * M;
-				System.err.println("Setting chunk size to: " + chunkSize);
+				// System.err.println("Setting chunk size to: " + chunkSize);
 			} else if (arg.equals("-minFileSize")) {
 				minFileSize = Integer.parseInt(args[++i]) * M;
-				System.err.println("Setting chunk size to: " + chunkSize);
+				// System.err.println("Setting minimum file size to: " + minFileSize);
 			} else if (arg.equals("-f")) {
 				fileList = args[++i];
 			} else {
@@ -74,15 +94,10 @@ public class S3Checksum {
 				s3Checksum.checksum();
 				System.out.println(s3Checksum);
 			} else if (file.isDirectory()) {
-				final int minSize = minFileSize;
-				List<Path> dirFiles = Files.walk(Paths.get(fileName)) //
-						.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)) //
-						.filter(Files::isReadable) //
-						.filter(f -> f.toFile().length() >= minSize) //
-						.collect(Collectors.toList());
+				List<File> dirFiles = listFiles(file, minFileSize);
 
-				for (Path p : dirFiles) {
-					S3ChecksumFile s3Checksum = new S3ChecksumFile(p.toFile(), chunkSize);
+				for (File f : dirFiles) {
+					S3ChecksumFile s3Checksum = new S3ChecksumFile(f, chunkSize);
 					s3Checksum.checksum();
 					System.out.println(s3Checksum);
 				}
