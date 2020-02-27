@@ -4,12 +4,15 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Calculate ETag checksum as performed by Amazon
@@ -25,17 +28,19 @@ public class S3Checksum {
 
 	public static int M = 1 * 1024 * 1024;
 	public static int CHUNK_SIZE_M = 8;
-	public static int CHUNK_SIZE = CHUNK_SIZE_M * M;
 
 	public static void main(String[] args) throws Exception {
+		int chunkSize = CHUNK_SIZE_M * M;
 		String fileList = null;
 		List<String> files = new LinkedList<>();
+		int minFileSize = -1;
 
 		if (args.length <= 0) {
 			System.err.println("Usage: s3Checksum [-chunkSize size_in_MB] [-f files.txt] [file1 ... fileN]");
 			System.err.println("Command line options:");
-			System.err.println("	-chunkSize <size> : Size in MB of each 'chunk' of MD5. Default " + CHUNK_SIZE_M);
-			System.err.println("	-f <files.txt>    : A txt file containing a list of files (one file per line)");
+			System.err.println("	-chunkSize <size>   : Size in MB of each 'chunk' of MD5. Default " + CHUNK_SIZE_M);
+			System.err.println("	-minFileSize <size> : Size in MB for a file to be checked. Default " + 0);
+			System.err.println("	-f <files.txt>      : A txt file containing a list of files (one file per line)");
 			System.exit(0);
 		}
 
@@ -43,8 +48,11 @@ public class S3Checksum {
 		for (int i = 0; i < args.length; i++) {
 			String arg = args[i];
 			if (arg.equals("-chunkSize")) {
-				CHUNK_SIZE = Integer.parseInt(args[++i]) * M;
-				System.err.println("Setting chunk size to: " + CHUNK_SIZE);
+				chunkSize = Integer.parseInt(args[++i]) * M;
+				System.err.println("Setting chunk size to: " + chunkSize);
+			} else if (arg.equals("-minFileSize")) {
+				minFileSize = Integer.parseInt(args[++i]) * M;
+				System.err.println("Setting chunk size to: " + chunkSize);
 			} else if (arg.equals("-f")) {
 				fileList = args[++i];
 			} else {
@@ -59,17 +67,77 @@ public class S3Checksum {
 
 		// Calculate ETag for every file
 		for (String fileName : files) {
-			S3Checksum s3Checksum = new S3Checksum(fileName);
-			s3Checksum.readFile();
-			System.out.println(s3Checksum.getEtag() + "\t" + fileName);
+			File file = new File(fileName);
+
+			if (file.isFile()) {
+				S3ChecksumFile s3Checksum = new S3ChecksumFile(file, chunkSize);
+				s3Checksum.checksum();
+				System.out.println(s3Checksum);
+			} else if (file.isDirectory()) {
+				final int minSize = minFileSize;
+				List<Path> dirFiles = Files.walk(Paths.get(fileName)) //
+						.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)) //
+						.filter(Files::isReadable) //
+						.filter(f -> f.toFile().length() >= minSize) //
+						.collect(Collectors.toList());
+
+				for (Path p : dirFiles) {
+					S3ChecksumFile s3Checksum = new S3ChecksumFile(p.toFile(), chunkSize);
+					s3Checksum.checksum();
+					System.out.println(s3Checksum);
+				}
+			}
+
 		}
 	}
 
-	String etag;
-	String fileName;
+}
 
-	public S3Checksum(String fileName) {
-		this.fileName = fileName;
+/**
+ * Calculate e-tag for a file
+ */
+class S3ChecksumFile {
+
+	int chunkSize;
+	String etag;
+	File file;
+
+	public S3ChecksumFile(File file, int chunkSize) {
+		this.file = file;
+		this.chunkSize = chunkSize;
+	}
+
+	/**
+	 * Read file and calculate MD5 sum
+	 */
+	public void checksum() {
+		try {
+			byte digests[] = new byte[0];
+			byte[] contents = new byte[chunkSize];
+			InputStream inStream = new FileInputStream(file);
+
+			// One digest for each "chunk"
+			int countChunks;
+			for (countChunks = 0; true; countChunks++) {
+				MessageDigest md = newMd5();
+				int read = 0, pos = 0;
+				while ((read = inStream.read(contents, pos, contents.length - pos)) >= 1)
+					pos += read;
+
+				if (pos > 0) md.update(contents, 0, pos);
+
+				byte[] digest = md.digest();
+				digests = concatenate(digests, digest);
+
+				if (read < 0) break;
+			}
+			inStream.close();
+
+			// Create Etag
+			etag = etag(digests, countChunks + 1);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	/**
@@ -118,37 +186,9 @@ public class S3Checksum {
 		}
 	}
 
-	/**
-	 * Read file and calculate MD5 sum
-	 */
-	public void readFile() {
-		try {
-			byte digests[] = new byte[0];
-			byte[] contents = new byte[CHUNK_SIZE];
-			InputStream inStream = new FileInputStream(new File(fileName));
-
-			// One digest for each "chunk"
-			int countChunks;
-			for (countChunks = 0; true; countChunks++) {
-				MessageDigest md = newMd5();
-				int read = 0, pos = 0;
-				while ((read = inStream.read(contents, pos, contents.length - pos)) >= 1)
-					pos += read;
-
-				if (pos > 0) md.update(contents, 0, pos);
-
-				byte[] digest = md.digest();
-				digests = concatenate(digests, digest);
-
-				if (read < 0) break;
-			}
-			inStream.close();
-
-			// Create Etag
-			etag = etag(digests, countChunks + 1);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
+	@Override
+	public String toString() {
+		return etag + "\t" + file.length() + "\t" + file.getAbsolutePath();
 	}
 
 }
