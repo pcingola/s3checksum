@@ -33,7 +33,10 @@ public class S3Checksum {
 	static List<File> listFiles(File file, int minFileSize) {
 		List<File> files = new ArrayList<>();
 		File[] listFiles = file.listFiles();
+
+		// Return empty list if we cannot read the directory
 		if (listFiles == null) return files;
+
 		for (File f : listFiles) {
 			// Ignore if we cannot read
 			if (!f.canRead()) continue;
@@ -131,6 +134,10 @@ class S3ChecksumFile {
 		try {
 			byte digests[] = new byte[0];
 			byte[] contents = new byte[chunkSize];
+
+			// Cannot calculate checksum if we cannot read file
+			if (!file.canRead()) return;
+
 			InputStream inStream = new FileInputStream(file);
 
 			// One digest for each "chunk"
