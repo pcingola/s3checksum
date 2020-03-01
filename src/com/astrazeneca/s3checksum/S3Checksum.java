@@ -32,7 +32,9 @@ public class S3Checksum {
 	 */
 	static List<File> listFiles(File file, int minFileSize) {
 		List<File> files = new ArrayList<>();
-		for (File f : file.listFiles()) {
+		File[] listFiles = file.listFiles();
+		if (listFiles == null) return files;
+		for (File f : listFiles) {
 			// Ignore if we cannot read
 			if (!f.canRead()) continue;
 			// Ignore links
